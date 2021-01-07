@@ -62,41 +62,50 @@ type CheGateway struct {
 	scheme *runtime.Scheme
 }
 
-func (g *CheGateway) Sync(ctx context.Context, manager *v1alpha1.CheManager) error {
+func (g *CheGateway) Sync(ctx context.Context, manager *v1alpha1.CheManager) (bool, error) {
 
 	syncer := sync.New(g.client, g.scheme)
 
+	var ret, partial bool
+	var err error
+
 	sa := getGatewayServiceAccountSpec(manager)
-	if _, err := syncer.Sync(ctx, manager, &sa, serviceAccountDiffOpts); err != nil {
-		return err
+	if partial, err = syncer.Sync(ctx, manager, &sa, serviceAccountDiffOpts); err != nil {
+		return false, err
 	}
+	ret = ret || partial
 
 	role := getGatewayRoleSpec(manager)
-	if _, err := syncer.Sync(ctx, manager, &role, roleDiffOpts); err != nil {
-		return err
+	if partial, err = syncer.Sync(ctx, manager, &role, roleDiffOpts); err != nil {
+		return false, err
 	}
+	ret = ret || partial
 
 	roleBinding := getGatewayRoleBindingSpec(manager)
-	if _, err := syncer.Sync(ctx, manager, &roleBinding, roleBindingDiffOpts); err != nil {
-		return err
+	if partial, err = syncer.Sync(ctx, manager, &roleBinding, roleBindingDiffOpts); err != nil {
+		return false, err
 	}
+	ret = ret || partial
 
 	traefikConfig := getGatewayTraefikConfigSpec(manager)
-	if _, err := syncer.Sync(ctx, manager, &traefikConfig, configMapDiffOpts); err != nil {
-		return err
+	if partial, err = syncer.Sync(ctx, manager, &traefikConfig, configMapDiffOpts); err != nil {
+		return false, err
 	}
+	ret = ret || partial
 
 	depl := getGatewayDeploymentSpec(manager)
-	if _, err := syncer.Sync(ctx, manager, &depl, deploymentDiffOpts); err != nil {
-		return err
+	if partial, err = syncer.Sync(ctx, manager, &depl, deploymentDiffOpts); err != nil {
+		return false, err
 	}
+	ret = ret || partial
 
 	service := getGatewayServiceSpec(manager)
-	if _, err := syncer.Sync(ctx, manager, &service, serviceDiffOpts); err != nil {
-		return err
+	if partial, err = syncer.Sync(ctx, manager, &service, serviceDiffOpts); err != nil {
+		return false, err
 	}
+	ret = ret || partial
 
-	return nil
+	return ret, nil
 }
 
 func GetGatewayServiceName(manager *v1alpha1.CheManager) string {

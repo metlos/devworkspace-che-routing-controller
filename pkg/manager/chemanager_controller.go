@@ -96,23 +96,44 @@ func (r *CheReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, r.finalize(current)
 	}
 
-	if err = r.reconcileGateway(ctx, current); err != nil {
+	var anyChanged, changed bool
+
+	if changed, err = r.reconcileGateway(ctx, current); err != nil {
 		return ctrl.Result{}, err
 	}
+	anyChanged = anyChanged || changed
 
 	if infrastructure.Current.Type == infrastructure.OpenShift {
-		if err = r.reconcileRoute(ctx, current); err != nil {
+		if changed, err = r.reconcileRoute(ctx, current); err != nil {
 			return ctrl.Result{}, err
 		}
+		anyChanged = anyChanged || changed
 	} else {
-		if err = r.reconcileIngress(ctx, current); err != nil {
+		if changed, err = r.reconcileIngress(ctx, current); err != nil {
 			return ctrl.Result{}, err
 		}
+		anyChanged = anyChanged || changed
 	}
 
-	// TODO update the status
+	return r.updateStatus(ctx, current, anyChanged)
+}
 
-	return ctrl.Result{}, nil
+func (r *CheReconciler) updateStatus(ctx context.Context, manager *v1alpha1.CheManager, changed bool) (ctrl.Result, error) {
+	currentPhase := manager.Status.GatewayPhase
+
+	if manager.Spec.Routing == v1alpha1.MultiHost {
+		manager.Status.GatewayPhase = v1alpha1.GatewayPhaseInactive
+	} else if changed {
+		manager.Status.GatewayPhase = v1alpha1.GatewayPhaseInitializing
+	} else {
+		manager.Status.GatewayPhase = v1alpha1.GatewayPhaseEstablished
+	}
+
+	if currentPhase != manager.Status.GatewayPhase {
+		return ctrl.Result{Requeue: true}, r.client.Status().Update(ctx, manager)
+	}
+
+	return ctrl.Result{Requeue: currentPhase == v1alpha1.GatewayPhaseInitializing}, nil
 }
 
 func (r *CheReconciler) finalize(router *v1alpha1.CheManager) error {
@@ -120,42 +141,45 @@ func (r *CheReconciler) finalize(router *v1alpha1.CheManager) error {
 	return nil
 }
 
-func (r *CheReconciler) reconcileGateway(ctx context.Context, manager *v1alpha1.CheManager) error {
+func (r *CheReconciler) reconcileGateway(ctx context.Context, manager *v1alpha1.CheManager) (bool, error) {
+	var changed bool
+	var err error
+
 	if manager.Spec.Routing == v1alpha1.SingleHost {
-		if err := r.gateway.Sync(ctx, manager); err != nil {
-			return err
-		}
-	} else if err := r.gateway.Delete(ctx, manager); err != nil {
-		return err
+		changed, err = r.gateway.Sync(ctx, manager)
+	} else {
+		changed, err = true, r.gateway.Delete(ctx, manager)
 	}
 
-	return nil
+	return changed, err
 }
 
-func (r *CheReconciler) reconcileRoute(ctx context.Context, manager *v1alpha1.CheManager) error {
+func (r *CheReconciler) reconcileRoute(ctx context.Context, manager *v1alpha1.CheManager) (bool, error) {
 	route := getRouteSpec(manager)
+	var changed bool
+	var err error
 
 	if manager.Spec.Routing == v1alpha1.SingleHost {
-		if _, err := r.syncer.Sync(ctx, manager, route, routeDiffOpts); err != nil {
-			return err
-		}
+		changed, err = r.syncer.Sync(ctx, manager, route, routeDiffOpts)
 	} else {
-		r.syncer.Delete(ctx, route)
+		changed, err = true, r.syncer.Delete(ctx, route)
 	}
-	return nil
+
+	return changed, err
 }
 
-func (r *CheReconciler) reconcileIngress(ctx context.Context, manager *v1alpha1.CheManager) error {
+func (r *CheReconciler) reconcileIngress(ctx context.Context, manager *v1alpha1.CheManager) (bool, error) {
 	ingress := getIngressSpec(manager)
+	var changed bool
+	var err error
 
 	if manager.Spec.Routing == v1alpha1.SingleHost {
-		if _, err := r.syncer.Sync(ctx, manager, ingress, ingressDiffOpts); err != nil {
-			return err
-		}
+		changed, err = r.syncer.Sync(ctx, manager, ingress, ingressDiffOpts)
 	} else {
-		r.syncer.Delete(ctx, ingress)
+		changed, err = true, r.syncer.Delete(ctx, ingress)
 	}
-	return nil
+
+	return changed, err
 }
 
 func getRouteSpec(manager *v1alpha1.CheManager) *routev1.Route {
@@ -183,6 +207,7 @@ func getRouteSpec(manager *v1alpha1.CheManager) *routev1.Route {
 }
 
 func getIngressSpec(manager *v1alpha1.CheManager) *v1beta1.Ingress {
+	pathType := v1beta1.PathTypeImplementationSpecific
 	return &v1beta1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      manager.Name,
@@ -203,7 +228,8 @@ func getIngressSpec(manager *v1alpha1.CheManager) *v1beta1.Ingress {
 						HTTP: &v1beta1.HTTPIngressRuleValue{
 							Paths: []v1beta1.HTTPIngressPath{
 								{
-									Path: "/",
+									Path:     "/",
+									PathType: &pathType,
 									Backend: v1beta1.IngressBackend{
 										ServiceName: GetGatewayServiceName(manager),
 										ServicePort: intstr.FromInt(GatewayPort),

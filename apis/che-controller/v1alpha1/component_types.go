@@ -47,9 +47,17 @@ type CheManagerSpec struct {
 	GatewayConfigurerImage string `json:"gatewayConfigurerImage,omitempty"`
 }
 
+type GatewayPhase string
+
+const (
+	GatewayPhaseInitializing = "Initializing"
+	GatewayPhaseEstablished  = "Established"
+	GatewayPhaseInactive     = "Inactive"
+)
+
 // +k8s:openapi-gen=true
 type CheManagerStatus struct {
-	GatewayPhase string `json:"gatewayPhase,omitempty"`
+	GatewayPhase GatewayPhase `json:"gatewayPhase,omitempty"`
 }
 
 // CheManager is the configuration of the CheManager layer of Devworkspace.

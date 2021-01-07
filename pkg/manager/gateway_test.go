@@ -38,7 +38,7 @@ func TestCreate(t *testing.T) {
 	managerName := "che"
 	ns := "default"
 
-	err := gateway.Sync(ctx, &v1alpha1.CheManager{
+	_, err := gateway.Sync(ctx, &v1alpha1.CheManager{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      managerName,
 			Namespace: ns,
