@@ -7,6 +7,7 @@ import (
 
 	"github.com/che-incubator/devworkspace-che-operator/apis/che-controller/v1alpha1"
 	"github.com/che-incubator/devworkspace-che-operator/pkg/defaults"
+	"github.com/che-incubator/devworkspace-che-operator/pkg/sync"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
@@ -33,7 +34,7 @@ func TestCreatesObjectsInSingleHost(t *testing.T) {
 		},
 	})
 
-	reconciler := CheReconciler{client: cl, scheme: scheme, gateway: CheGateway{client: cl, scheme: scheme}}
+	reconciler := CheReconciler{client: cl, scheme: scheme, gateway: CheGateway{client: cl, scheme: scheme}, syncer: sync.New(cl, scheme)}
 
 	_, err := reconciler.Reconcile(reconcile.Request{NamespacedName: types.NamespacedName{Name: managerName, Namespace: ns}})
 	if err != nil {
@@ -103,7 +104,7 @@ func TestUpdatesObjectsInSingleHost(t *testing.T) {
 
 	ctx := context.TODO()
 
-	reconciler := CheReconciler{client: cl, scheme: scheme, gateway: CheGateway{client: cl, scheme: scheme}}
+	reconciler := CheReconciler{client: cl, scheme: scheme, gateway: CheGateway{client: cl, scheme: scheme}, syncer: sync.New(cl, scheme)}
 
 	_, err := reconciler.Reconcile(reconcile.Request{NamespacedName: types.NamespacedName{Name: managerName, Namespace: ns}})
 	if err != nil {
@@ -142,7 +143,7 @@ func TestDoesntCreateObjectsInMultiHost(t *testing.T) {
 		},
 	})
 
-	reconciler := CheReconciler{client: cl, scheme: scheme, gateway: CheGateway{client: cl, scheme: scheme}}
+	reconciler := CheReconciler{client: cl, scheme: scheme, gateway: CheGateway{client: cl, scheme: scheme}, syncer: sync.New(cl, scheme)}
 
 	_, err := reconciler.Reconcile(reconcile.Request{NamespacedName: types.NamespacedName{Name: managerName, Namespace: ns}})
 	if err != nil {
@@ -208,7 +209,7 @@ func TestDeletesObjectsInMultiHost(t *testing.T) {
 
 	ctx := context.TODO()
 
-	reconciler := CheReconciler{client: cl, scheme: scheme, gateway: CheGateway{client: cl, scheme: scheme}}
+	reconciler := CheReconciler{client: cl, scheme: scheme, gateway: CheGateway{client: cl, scheme: scheme}, syncer: sync.New(cl, scheme)}
 
 	_, err := reconciler.Reconcile(reconcile.Request{NamespacedName: types.NamespacedName{Name: managerName, Namespace: ns}})
 	if err != nil {
